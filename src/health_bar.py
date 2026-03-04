@@ -1,4 +1,5 @@
 import pygame
+import game_config as cfg
 
 def draw_health_bar(surface, center, health_ratio, size=(40, 10)):
     """
@@ -20,5 +21,5 @@ def draw_health_bar(surface, center, health_ratio, size=(40, 10)):
     red_rect = pygame.Rect(center.x - width // 2 + green_width, center.y - height // 2, red_width, height)
 
     # Draw the green and red parts of the health bar
-    pygame.draw.rect(surface, (0, 255, 0), green_rect)  # Green part
-    pygame.draw.rect(surface, (255, 0, 0), red_rect)    # Red part
+    pygame.draw.rect(surface, cfg.COLOR_HEALTH_GREEN, green_rect)  # Green part
+    pygame.draw.rect(surface, cfg.COLOR_HEALTH_RED, red_rect)    # Red part

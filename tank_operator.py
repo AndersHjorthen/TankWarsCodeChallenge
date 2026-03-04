@@ -28,7 +28,7 @@ class ShotObject:
         self.direction = direction
 
 class GameState:
-    def __init__(self, tank, other_tanks = [], shots = []):
+    def __init__(self, tank, other_tanks=None, shots=None):
         """
         Holds the current state of the game, providing necessary information for decision-making.
 
@@ -37,8 +37,8 @@ class GameState:
         :param shots: List of ShotObject representing shots currently active in the game. Beware of incoming grenades!
         """
         self.tank = tank
-        self.other_tanks = other_tanks
-        self.shots = shots
+        self.other_tanks = other_tanks if other_tanks is not None else []
+        self.shots = shots if shots is not None else []
 
 class OperatorActions:
     def __init__(self, turn = 0.0, turn_turret = 0.0, engine = 0.0, shoot = False):

@@ -2,6 +2,7 @@ import traceback
 import socket
 import time
 import json
+import logging
 from src.json_protocol import JSONProtocol
 from src.vec import Vec
 from tank_operator import TankOperator
@@ -9,6 +10,8 @@ from tank_operator import OperatorActions
 from tank_operator import GameState
 from tank_operator import TankObject
 from tank_operator import ShotObject
+
+logger = logging.getLogger(__name__)
 
 from src.tcp_server import TcpServer
 from src.tcp_client import TcpClient
@@ -49,7 +52,8 @@ class OperatorTCPadaptor_Server(TankOperator):
                     elif "turn" in jsonresponse:
                         # Just overwrite older action response
                         self.latestOperatorAction =  OperatorActions(**jsonresponse)
-        except:
+        except Exception as e:
+            logger.error("Server communication error: %s", e)
             self.json_protocol = JSONProtocol()
   
             
@@ -78,13 +82,27 @@ class OperatorTCPadaptor_Client:
         self.game_over_message = None
     
     def deserialize_game_state(self,data):
+        required_keys = ('tank', 'other_tanks', 'shots')
+        for key in required_keys:
+            if key not in data:
+                raise KeyError("Missing required key in game state: '%s'" % key)
+
         def dict_to_vec(d):
+            for k in ('x', 'y'):
+                if k not in d:
+                    raise KeyError("Missing required key in vec: '%s'" % k)
             return Vec(d['x'], d['y'])
 
         def dict_to_tank(d):
+            for k in ('position', 'direction', 'turret_direction'):
+                if k not in d:
+                    raise KeyError("Missing required key in tank: '%s'" % k)
             return TankObject(dict_to_vec(d['position']), dict_to_vec(d['direction']), dict_to_vec(d['turret_direction']))
 
         def dict_to_shot(d):
+            for k in ('position', 'direction'):
+                if k not in d:
+                    raise KeyError("Missing required key in shot: '%s'" % k)
             return ShotObject(dict_to_vec(d['position']), dict_to_vec(d['direction']))
 
         tank = dict_to_tank(data['tank'])
@@ -110,13 +128,15 @@ class OperatorTCPadaptor_Client:
                             self._actions_sent += 1
                         except Exception:
                             print(traceback.format_exc())
-                    except:
+                    except (KeyError, TypeError) as e:
+                        logger.error("Failed to deserialize game state: %s", e)
                         try:
                             self.game_over_message = GameOverMessage(**lastmessage_json).game_over_message
-                        except:
-                            print("Message from server not understood: " + str(lastmessage_json))
+                        except (KeyError, TypeError) as e:
+                            logger.error("Message from server not understood: %s - %s", lastmessage_json, e)
 
-        except:
+        except Exception as e:
+            logger.error("Client communication error: %s", e)
             self.json_protocol = JSONProtocol()
             self.bytes_to_send = None
         
@@ -124,34 +144,3 @@ class OperatorTCPadaptor_Client:
             self.bytes_to_send = self.json_protocol.encode(NameResponse(self.tankoperator.get_operator_name()))
             self.name_sent = True
         return None != self.bytes_to_send #True if more work, call again asap.
-
-
-# class MockTankOperator(TankOperator):
-#     def tank_action(self, game_state):
-#         return OperatorActions(0.5,0.1,True)
-
-#     def get_operator_name(self):
-#         return "MockOperator"
-
-# ss = OperatorTCPadaptor_Server('localhost')
-# cc = OperatorTCPadaptor_Client('localhost', ss.tcp_server.serverPort, MockTankOperator())
-# nn = None
-# while not nn:
-#     nn = ss.get_operator_name()
-#     cc.run_client()
-    
-# print(nn)
-
-# from src.vec import Vec
-# from tank_operator import GameObject
-# vv = Vec(1,1)
-# gg = GameObject(vv, vv)
-
-
-# while True:
-#     aa = ss.tank_action(GameState(gg, [gg,gg,gg], [gg,gg,gg,gg,gg]))
-#     if aa:
-#         print(aa.turn, aa.engine, aa.shoot)
-#     cc.run_client()
-#     time.sleep(1/30)
-    
