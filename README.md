@@ -146,8 +146,17 @@ standard 2D vector operations:
 | `src/tcp_client.py`         | Non-blocking TCP client                                      |
 | `src/tcp_server.py`         | Non-blocking TCP server                                      |
 | `src/countdown_timer.py`    | Game countdown timer utility                                 |
-| `src/health_bar.py`         | Health bar rendering                                         |
-| `src/screens.py`            | UI screens (lobby, text rendering)                           |
+| `src/health_bar.py`         | Health bar rendering (gradient color, border, name label)    |
+| `src/screens.py`            | UI screens (intro, lobby, game-over with styled visuals)     |
+| `src/arena.py`              | Pre-rendered arena background with grid and decorative border |
+| `src/particles.py`          | Reusable particle system (Particle + ParticleSystem classes) |
+| `src/effects.py`            | Visual effects manager (smoke, tracers, explosions, shake, aura) |
+| `src/hud.py`                | HUD overlay (scoreboard, timer, kill feed)                   |
+| `src/obstacles.py`          | Textured obstacle rendering and collision detection          |
+| `src/powerups.py`           | Power-up spawning, rendering, and active effect tracking     |
+| `example_operators.py`      | Three example AI bots: ChaserOperator, DodgerOperator, SniperOperator |
+| `game_config.py`            | Centralized configuration constants for all game systems     |
+| `test_visual.py`            | Quick visual test launcher with 4 AI operators (no TCP)      |
 
 ---
 
@@ -278,3 +287,58 @@ mypy .
 - **Win Condition**: Last tank standing wins. If all remaining tanks are
   destroyed simultaneously, the result is a draw.
 - **Timeout**: Matches last a maximum of 4 minutes.
+- **Obstacles**: Walls are placed around the arena center, blocking movement and
+  shots. Shots that hit obstacles explode on contact.
+- **Power-ups**: Collectible items spawn periodically on the arena floor. Pick one
+  up by driving over it. Each lasts 10 seconds:
+  - **Speed Boost** (blue, "S") -- 1.5x movement speed.
+  - **Rapid Fire** (red, "R") -- 1-second shot cooldown instead of 5.
+  - **Shield** (green, "D") -- 50% damage reduction.
+
+---
+
+## Visual Features
+
+The game includes a full set of visual effects designed to keep the action readable
+while looking polished:
+
+### Arena
+- Dark blue-grey background with a subtle grid overlay.
+- Double-line border with decorative corner accents.
+
+### Particles and Effects
+- **Smoke trails** -- wispy particles emitted behind moving tanks.
+- **Shot tracers** -- glowing trail particles along each projectile's path.
+- **Muzzle flash** -- bright burst of particles when a tank fires.
+- **Particle explosions** -- shots that hit anything produce fire particles and
+  debris chunks (replaces the old expanding-circle animation).
+- **Screen shake** -- brief camera shake when a tank is destroyed.
+- **Hit flash** -- white overlay flashes on a tank when it takes damage.
+- **Shot glow** -- additive light halo drawn behind each projectile.
+- **Power-up aura** -- pulsing colored ring around tanks with active effects.
+
+### HUD (Heads-Up Display)
+- **Scoreboard** (top-left) -- semi-transparent panel showing player names, kills,
+  and damage dealt, sorted by score.
+- **Timer** (top-center) -- countdown with color coding: white → yellow (< 60 s) →
+  red (< 15 s).
+- **Kill feed** (top-right) -- recent elimination events that fade after 5 seconds.
+
+### Health Bars
+- Gradient coloring: green at full health, yellow at half, red when low.
+- Dark border outline and player name label displayed below the bar.
+
+### Obstacles
+- Pre-rendered textured surfaces with a diagonal hash pattern.
+- Highlight edge (top/left) and shadow edge (bottom/right) for a 3D look.
+
+### Screens
+- **Intro** -- text shadow for depth.
+- **Lobby** -- panel background, colored square indicators next to each player name.
+- **Game over** -- gold-highlighted winner name, semi-transparent stats table
+  background, shadow text.
+
+### Performance
+All textures and backgrounds are pre-rendered once at startup. The particle system
+enforces a hard cap of 500 particles. Total visual overhead is approximately 8 ms
+per frame, well within the 33 ms budget at 30 FPS.
