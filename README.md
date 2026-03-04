@@ -1,38 +1,280 @@
 # Tank Wars Code Challenge
 
-Welcome to the Tank Wars Game project! This game is an exciting, fast-paced battle where players maneuver up to four tanks in a strategic environment, aiming to outwit and outlast their opponents. The game is developed in Python, utilizing the Pygame library for rendering and game logic.
+Tank Wars is a multiplayer tank battle game built with Python and Pygame. Players
+program AI-controlled tank operators that compete in a real-time arena, maneuvering
+to dodge incoming fire while aiming and shooting at opponents. The challenge: build
+the smartest tank AI and claim victory.
 
-## Getting Started
-- Clone repository
-- Install python version 3
-  - Make sure to let installer indlude pip and add python to PATH
-- pip install pygame
-- Run "python tankwars_game_server.py"
+Up to four tanks can battle simultaneously. Each tank is controlled by a
+`TankOperator` -- either a human via keyboard, a networked remote player, or an
+AI bot that you write.
 
-# Objectives
-Your team must build a Tank Operator BOT that can play the Tank Wars Game - and win glory for you!
+---
 
-For the Tank wars code challenge, you will have to implement the "my_tank_operator.py" file.
+## Quick Start
 
-You can play Tank Wars in two ways:
-- Locally, to test your tank operator bot as you develop it, or against others (or human players) for fun.
-- On the game server - where the finals will take place.
+### Prerequisites
 
-### To start the game locally:
-- Edit **server_settings.py** : Optionally change server settings such as which bots to play against.
-> python tankwars_game_server.py
+- Python 3.10 or newer
+- pip (included with most Python installations)
+- pygame
 
-### To connect to a game server on LAN:
-- Add ip of server and port to **client_settings.py** (and specify which operator to use)
-> python tankwars_game_client.py
+### Installation
 
-### To develop your tank operator
-- In **my_tank_operator.py** file: Implement the *get_tank_action* function: A function that is called in real time with the current game state - and returns the actions your tank bot will take. You will have to implement logic that continuously evaluates the other tanks positions etc. and shots being fired, and decide what to do. Also implement the *get_operator_name* function: give your operator bot a name.
-- What you need to know:
-  - Look in the **tank_operator.py** - this has all the classes you need to know for the game interface GameState->(your code in get_tank_action)->OperatorActions
-  - The GameState objects have 2D vectors called Vec. The Vec class is implemented in **src/vec.py**. It has a lot of nice vector functionality - check it out.
-  - You shouldn't need to look in any other game files.
+```bash
+pip install pygame
+```
 
-## Enjoy!
+If a `requirements.txt` file is present:
 
+```bash
+pip install -r requirements.txt
+```
 
+### Running the Game
+
+Start a local game server (opens the game window):
+
+```bash
+python tankwars_game_server.py
+```
+
+The lobby screen will appear showing all configured players. Press **s** to start
+the match once players are ready, or press **q** to quit.
+
+---
+
+## How to Build Your Tank AI
+
+Your goal is to implement a `TankOperator` subclass in the file
+`my_tank_operator.py`. This class must provide two methods:
+
+### The TankOperator Interface
+
+```python
+from tank_operator import TankOperator, OperatorActions, GameState
+
+class MyTankOperator(TankOperator):
+    def get_operator_name(self) -> str:
+        """Return a display name for your tank."""
+        return "MyBot"
+
+    def get_tank_action(self, game_state: GameState) -> OperatorActions:
+        """Called every frame. Inspect game_state and return your actions."""
+        actions = OperatorActions()
+        # ... your logic here ...
+        return actions
+```
+
+### GameState
+
+The `GameState` object passed to `get_tank_action` contains everything your bot
+needs to make decisions:
+
+| Attribute      | Type                | Description                                      |
+|----------------|---------------------|--------------------------------------------------|
+| `tank`         | `TankObject`        | Your own tank (position, direction, turret_direction) |
+| `other_tanks`  | `list[TankObject]`  | All other tanks currently alive                  |
+| `shots`        | `list[ShotObject]`  | All active shots on the field                    |
+
+**TankObject** fields:
+
+| Field               | Type  | Description                              |
+|---------------------|-------|------------------------------------------|
+| `position`          | `Vec` | 2D position on the game field            |
+| `direction`         | `Vec` | Unit vector of the tank body facing direction |
+| `turret_direction`  | `Vec` | Unit vector of the turret facing direction    |
+
+**ShotObject** fields:
+
+| Field       | Type  | Description                       |
+|-------------|-------|-----------------------------------|
+| `position`  | `Vec` | Current position of the shot      |
+| `direction` | `Vec` | Unit vector of the shot direction |
+
+### OperatorActions
+
+Return an `OperatorActions` object from `get_tank_action` to control your tank:
+
+| Field          | Type    | Range              | Description                                   |
+|----------------|---------|--------------------|-----------------------------------------------|
+| `turn`         | `float` | -1.0 to 1.0       | Turn the tank body (negative = left, positive = right) |
+| `turn_turret`  | `float` | -1.0 to 1.0       | Turn the turret independently                 |
+| `engine`       | `float` | -1.0 to 1.0       | Throttle (negative = reverse, positive = forward) |
+| `shoot`        | `bool`  | True / False       | Fire the cannon (subject to cooldown)         |
+
+### The Vec Class
+
+All positions and directions use the `Vec` class from `src/vec.py`. It supports
+standard 2D vector operations:
+
+- Arithmetic: `v1 + v2`, `v1 - v2`, `v * scalar`
+- `v.dot(other)` -- dot product
+- `v.magnitude()` -- vector length
+- `v.normalize()` -- unit vector
+- `v.rotate(angle_degrees)` -- rotate by degrees
+- `v.get_orientation_angle()` -- angle in degrees
+- `v.as_tuple()` -- returns `(x, y)`
+
+### Game Loop and Timing
+
+- The game runs at **30 FPS**. Your `get_tank_action` is called once per frame.
+- The cannon has a **5-second cooldown** between shots.
+- The game has a **4-minute timeout**. If time runs out, the player with the most
+  damage dealt wins.
+- Tanks are eliminated when their health drops below zero.
+- If only one tank remains, that tank wins. If all tanks are eliminated
+  simultaneously, the game is a draw.
+
+---
+
+## Architecture Overview
+
+| File                        | Description                                                  |
+|-----------------------------|--------------------------------------------------------------|
+| `tankwars_game_server.py`   | Main game server -- runs the game loop, rendering, and physics |
+| `tankwars_game_client.py`   | Headless network client for connecting a remote operator     |
+| `tank_operator.py`          | Core interfaces: `TankOperator`, `GameState`, `OperatorActions`, `TankObject`, `ShotObject` |
+| `my_tank_operator.py`       | Your AI implementation goes here                             |
+| `dummy_operator.py`         | Simple example bot that spins and shoots                     |
+| `keyboard_operator.py`      | Human-controlled operator using keyboard input               |
+| `operator_tcp_adapter.py`   | TCP adapter for server-side and client-side network play     |
+| `server_settings.py`        | Server configuration: which operators to load, starting positions |
+| `client_settings.py`        | Client configuration: server IP/port, which operator to use  |
+| `src/vec.py`                | 2D vector class used throughout the game                     |
+| `src/json_protocol.py`      | JSON-over-TCP message framing protocol                       |
+| `src/tcp_client.py`         | Non-blocking TCP client                                      |
+| `src/tcp_server.py`         | Non-blocking TCP server                                      |
+| `src/countdown_timer.py`    | Game countdown timer utility                                 |
+| `src/health_bar.py`         | Health bar rendering                                         |
+| `src/screens.py`            | UI screens (lobby, text rendering)                           |
+
+---
+
+## Configuration
+
+### server_settings.py
+
+Edit this file to configure which operators participate in a local game:
+
+```python
+def get_tank_operators_and_starting_positions():
+    return {
+        "red"   : DummyOperator(),
+        "blue"  : KeyboardOperator("BlueBob"),
+        "yellow": OperatorTCPadaptor_Server(server_ip),
+        "green" : MyTankOperator(),
+    }
+```
+
+Each color key (`red`, `blue`, `yellow`, `green`) corresponds to a starting
+corner of the arena. You can assign any `TankOperator` subclass to any slot.
+Set `server_fullscreen = True` to run in fullscreen mode.
+
+### Game Parameters (in tankwars_game_server.py)
+
+| Parameter              | Default   | Description                          |
+|------------------------|-----------|--------------------------------------|
+| `display_size`         | 1200x800  | Arena dimensions in pixels           |
+| `game_time_out_secs`   | 240 (4 min) | Match duration before timeout      |
+| `game_fps`             | 30        | Frames per second                    |
+| `tank_start_health`    | 200       | Starting health for each tank        |
+| `max_shot_damage`      | 100       | Maximum damage per shot              |
+| `tank_turn_speed`      | 7.5 deg   | Tank body rotation speed per frame   |
+| `tank_turret_turn_speed` | 20 deg  | Turret rotation speed per frame      |
+| `tank_maxspeed`        | 3.5       | Maximum tank movement speed          |
+| `shot_speed`           | 15.0      | Projectile movement speed            |
+| `tank_shots_cooldown`  | 5 sec     | Cooldown between shots               |
+
+---
+
+## Network Play
+
+Tank Wars supports remote players over TCP. One machine runs the game server;
+remote players connect as clients.
+
+### Server Setup
+
+In `server_settings.py`, assign an `OperatorTCPadaptor_Server` to one or more
+color slots:
+
+```python
+from operator_tcp_adapter import OperatorTCPadaptor_Server
+
+"yellow": OperatorTCPadaptor_Server('0.0.0.0'),  # listen on all interfaces
+```
+
+Start the server:
+
+```bash
+python tankwars_game_server.py
+```
+
+The lobby screen will show the IP and port for each TCP slot while waiting for
+the remote player to connect.
+
+### Client Setup
+
+Edit `client_settings.py` with the server IP and port:
+
+```python
+serverIp = "192.168.1.100"
+serverPort = 49909
+tankoperator = MyTankOperator()   # or any TankOperator subclass
+```
+
+Then run the client:
+
+```bash
+python tankwars_game_client.py
+```
+
+Use the `-p` flag to override the port from the command line:
+
+```bash
+python tankwars_game_client.py -p 50123
+```
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+### Linting
+
+```bash
+ruff check .
+```
+
+### Type Checking
+
+```bash
+mypy .
+```
+
+---
+
+## Game Rules
+
+- **Arena**: 1200 x 800 pixels. Tanks and shots are bounded by the arena edges.
+- **Players**: 2 to 4 tanks per match.
+- **Health**: Each tank starts with 200 HP. Damage is calculated based on the
+  proximity of the shot impact.
+- **Damage**: Maximum 100 damage per shot, scaled by distance from the impact
+  point.
+- **Shooting**: Cannon fires in the turret direction. There is a 5-second
+  cooldown between shots.
+- **Movement**: Tanks move in their facing direction. Speed and turn rate are
+  capped.
+- **Turret**: The turret rotates independently from the tank body, but also
+  rotates with the tank when the tank turns.
+- **Scoring**: If the timer runs out, the player with the highest total damage
+  dealt wins.
+- **Win Condition**: Last tank standing wins. If all remaining tanks are
+  destroyed simultaneously, the result is a draw.
+- **Timeout**: Matches last a maximum of 4 minutes.

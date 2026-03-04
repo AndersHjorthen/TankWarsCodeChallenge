@@ -10,6 +10,8 @@ from tank_operator import OperatorActions
 from tank_operator import GameState
 from tank_operator import TankObject
 from tank_operator import ShotObject
+from tank_operator import ObstacleObject
+from tank_operator import PowerUpObject
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +107,35 @@ class OperatorTCPadaptor_Client:
                     raise KeyError("Missing required key in shot: '%s'" % k)
             return ShotObject(dict_to_vec(d['position']), dict_to_vec(d['direction']))
 
+        def dict_to_obstacle(d):
+            for k in ('x', 'y', 'width', 'height'):
+                if k not in d:
+                    raise KeyError("Missing required key in obstacle: '%s'" % k)
+            return ObstacleObject(d['x'], d['y'], d['width'], d['height'])
+
+        def dict_to_powerup(d):
+            for k in ('x', 'y', 'power_type'):
+                if k not in d:
+                    raise KeyError("Missing required key in powerup: '%s'" % k)
+            return PowerUpObject(d['x'], d['y'], d['power_type'])
+
         tank = dict_to_tank(data['tank'])
         other_tanks = [dict_to_tank(t) for t in data['other_tanks']]
         shots = [dict_to_shot(s) for s in data['shots']]
 
-        return GameState(tank, other_tanks, shots)
+        # Backwards-compatible: new fields may be absent in older servers
+        obstacles = [dict_to_obstacle(o) for o in data['obstacles']] if 'obstacles' in data else None
+        powerups = [dict_to_powerup(p) for p in data['powerups']] if 'powerups' in data else None
+        my_health = data.get('my_health')
+        arena_width = data.get('arena_width')
+        arena_height = data.get('arena_height')
+        game_time_remaining = data.get('game_time_remaining')
+
+        return GameState(tank, other_tanks, shots,
+                         obstacles=obstacles, powerups=powerups,
+                         my_health=my_health, arena_width=arena_width,
+                         arena_height=arena_height,
+                         game_time_remaining=game_time_remaining)
     
     def run_client(self):
         try:

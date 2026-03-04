@@ -14,10 +14,14 @@ from tank_operator import OperatorActions
 from tank_operator import GameState
 from tank_operator import TankObject
 from tank_operator import ShotObject
+from tank_operator import ObstacleObject
+from tank_operator import PowerUpObject
 from src.countdown_timer import CountDownTimer
 from src.screens import game_wait_for_players_screen
 from src.screens import msg_screen_topleft
 from src.health_bar import draw_health_bar
+from src.obstacles import Obstacle
+from src.powerups import PowerUp, ActiveEffect
 import server_settings
 import game_config as cfg
 
@@ -43,6 +47,10 @@ tank_maxspeed = cfg.TANK_MAX_SPEED
 
 shot_speed = cfg.SHOT_SPEED
 tank_shots_cooldown = cfg.SHOT_COOLDOWN_SECS
+
+# Load arena obstacles
+arena_obstacles = [Obstacle(*obs) for obs in cfg.ARENA_OBSTACLES]
+obstacle_gamestate_objects = [ObstacleObject(*obs) for obs in cfg.ARENA_OBSTACLES]
 
 # Some resources
 game_layout_display = pygame.display.set_mode(display_size.as_tuple(), flags=fullscreen)
@@ -108,20 +116,33 @@ def game_intro():
             break
 
 # function for game Over screen
-def game_over(winner):
+def game_over(winner, tank_stats=None):
     print("Winner(s): " + winner)
+    if tank_stats:
+        print("\n--- End-of-Game Stats ---")
+        for s in tank_stats:
+            print(f"  {s['name']}: kills={s['kills']} dmg={s['damage_dealt']} "
+                  f"acc={s['accuracy']}% powerups={s['powerups_collected']}")
 
     while True:
         for event in pygame.event.get():
-            # print(event)
             if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
                 pygame.quit()
                 quit()
 
         game_layout_display.fill(cfg.COLOR_BLACK)
         msg_screen("Game Over - Winner(s):", cfg.COLOR_WHITE, -100, size="medium")
-        msg_screen(winner, cfg.COLOR_WHITE, 0, size="medium")
-        msg_screen("Press any key to quit", cfg.COLOR_WHEAT, 100, size="small")
+        msg_screen(winner, cfg.COLOR_WHITE, -30, size="medium")
+
+        # Display stats table
+        if tank_stats:
+            y_offset = 40
+            msg_screen("Name       Kills  Damage  Accuracy  Powerups", cfg.COLOR_GREY, y_offset, size="vsmall")
+            for i, s in enumerate(tank_stats):
+                line = f"{s['name']:<12} {s['kills']}     {s['damage_dealt']:>6}    {s['accuracy']:>5}%     {s['powerups_collected']}"
+                msg_screen(line, cfg.COLOR_WHEAT, y_offset + 25 + i * 22, size="vsmall")
+
+        msg_screen("Press any key to quit", cfg.COLOR_WHEAT, 200, size="small")
 
         pygame.display.update()
 
@@ -220,6 +241,39 @@ class PlayerContext(GameEntity):
         self.kills = 0
         self.health = tank_start_health
         self.damage_dealt = 0
+        self.shots_fired = 0
+        self.shots_hit = 0
+        self.powerups_collected = 0
+        self.active_effects = []
+
+    def has_effect(self, power_type):
+        return any(e.power_type == power_type and not e.is_expired() for e in self.active_effects)
+
+    def get_effective_max_speed(self):
+        if self.has_effect("speed_boost"):
+            return tank_maxspeed * cfg.POWERUP_SPEED_MULTIPLIER
+        return tank_maxspeed
+
+    def get_effective_shot_cooldown(self):
+        if self.has_effect("rapid_fire"):
+            return cfg.POWERUP_RAPID_FIRE_COOLDOWN
+        return tank_shots_cooldown
+
+    def get_damage_multiplier(self):
+        if self.has_effect("shield"):
+            return cfg.POWERUP_SHIELD_DAMAGE_REDUCTION
+        return 1.0
+
+    def update_effects(self):
+        self.active_effects = [e for e in self.active_effects if not e.is_expired()]
+
+    def add_effect(self, power_type):
+        # Refresh if already active, otherwise add new
+        for e in self.active_effects:
+            if e.power_type == power_type:
+                e.expiry_time = time.time() + cfg.POWERUP_DURATION
+                return
+        self.active_effects.append(ActiveEffect(power_type, cfg.POWERUP_DURATION))
 
     def render_entity(self):
         self._render_entity(self.image, self.direction.get_orientation_angle(), self.position.as_tuple())
@@ -246,22 +300,43 @@ class Shot(GameEntity):
     def get_gamestate_object(self):
         return ShotObject(Vec(self.position), Vec(self.direction))
 
+def render_obstacles(screen, obstacles):
+    for obs in obstacles:
+        obs.render(screen, cfg.OBSTACLE_COLOR, cfg.OBSTACLE_BORDER_COLOR)
+
+def check_shot_obstacle_collision(shot, obstacles):
+    shot_rect = shot.get_intersection_geometry()
+    for obs in obstacles:
+        if obs.collides_with_rect(shot_rect):
+            return True
+    return False
+
+def check_tank_powerup_collision(tank, powerups):
+    collected = []
+    tank_rect = tank.get_intersection_geometry()
+    for pu in powerups:
+        if pu.alive and tank_rect.colliderect(pu.get_pickup_rect(cfg.POWERUP_PICKUP_RADIUS)):
+            pu.alive = False
+            collected.append(pu)
+    return collected
+
 shots_cooldown_expiry = {}
 def check_shots_fired(player_context, operator_actions):
     shot = None
 
     if operator_actions.shoot:
         cooldown = False
+        effective_cooldown = player_context.get_effective_shot_cooldown()
         try:
             if shots_cooldown_expiry[player_context] > time.time():
-                #cooldown in effect
                 cooldown = True
         except Exception:
             pass
 
         if not cooldown:
             shot = Shot(player_context, shot_image)
-            shots_cooldown_expiry[player_context] = time.time() + tank_shots_cooldown
+            player_context.shots_fired += 1
+            shots_cooldown_expiry[player_context] = time.time() + effective_cooldown
     return shot
 
 class Explosion:
@@ -295,43 +370,85 @@ def draw_explosion(screen, explosion):
 def game_loop(tanks):
     winner = None
     count_down_timer = CountDownTimer(game_time_out_secs)
+    all_tanks_started = list(tanks)
 
     shots = []
     explosions = []
+    powerups = []
+    last_powerup_spawn = time.time()
 
     while winner is None:
         for event in pygame.event.get():
-            # print(event)
             if event.type == pygame.QUIT:
-                return "NONE - quitting early?"
-        #main game loop - render, act, repeat
+                return "NONE - quitting early?", []
 
         ## Render
-        # Clear the screen
         game_layout_display.fill(cfg.COLOR_BLACK)
+
+        # Render obstacles
+        render_obstacles(game_layout_display, arena_obstacles)
+
+        # Spawn power-ups periodically
+        if time.time() - last_powerup_spawn > cfg.POWERUP_SPAWN_INTERVAL:
+            pu = PowerUp.spawn_random(cfg.DISPLAY_WIDTH, cfg.DISPLAY_HEIGHT, arena_obstacles)
+            if pu:
+                powerups.append(pu)
+            last_powerup_spawn = time.time()
+
+        # Render power-ups
+        for pu in powerups:
+            if pu.alive:
+                pu.render(game_layout_display, cfg.POWERUP_COLORS, cfg.POWERUP_LABELS, cfg.POWERUP_RADIUS)
+
+        # Build powerup gamestate objects
+        powerup_gamestate_objects = [PowerUpObject(pu.x, pu.y, pu.power_type) for pu in powerups if pu.alive]
+
+        # Calculate time remaining
+        time_remaining = max(0.0, count_down_timer.end_time - time.time())
 
         ## Update tank movement
         for tank in tanks:
-            # if tank.alive:
-            # gamestate represents the input to the decision making for the operator. ie. a copy of the game world state..
+            tank.update_effects()
+
             gamestate = GameState(tank.get_gamestate_object(),
-                                    [tt.get_gamestate_object() for tt in tanks if tt != tank], ## game objects for other tanks
-                                    [ss.get_gamestate_object() for ss in shots])
+                                    [tt.get_gamestate_object() for tt in tanks if tt != tank],
+                                    [ss.get_gamestate_object() for ss in shots],
+                                    obstacles=obstacle_gamestate_objects,
+                                    powerups=powerup_gamestate_objects,
+                                    my_health=tank.health,
+                                    arena_width=display_size.x,
+                                    arena_height=display_size.y,
+                                    game_time_remaining=time_remaining)
             tankActions = tank.operator.get_tank_action(gamestate)
             if tankActions:
                 shot = check_shots_fired(tank, tankActions)
                 if not shot is None:
                     shots.append(shot)
                 tank.apply_turn(tankActions)
-                tank.move_check_boundary(tankActions.engine, tank_maxspeed)
+                tank.move_check_boundary(tankActions.engine, tank.get_effective_max_speed())
+
+            # Check power-up collection
+            collected = check_tank_powerup_collision(tank, powerups)
+            for pu in collected:
+                tank.add_effect(pu.power_type)
+                tank.powerups_collected += 1
 
             tank.render_entity()
 
+        # Remove collected power-ups
+        powerups = [pu for pu in powerups if pu.alive]
+
         for ss in shots:
+            # Check shot-obstacle collision
+            if check_shot_obstacle_collision(ss, arena_obstacles):
+                shots.remove(ss)
+                explosions.append(Explosion(ss.position.as_tuple(), 0.3))
+                continue
+
             if ss.move_check_boundary(1, shot_speed):
-                #shot reached border
                 shots.remove(ss)
                 explosions.append(Explosion(ss.position.as_tuple(), cfg.EXPLOSION_DURATION_BORDER))
+                continue
 
             ss.render_entity()
 
@@ -346,25 +463,24 @@ def game_loop(tanks):
             for tank in tanks:
                 if tank != shot.playerContext:
                     tank_rect = tank.get_intersection_geometry()
-                    # pygame.draw.rect(game_layout_display, red, tank_rect, 3)  # width = 3
 
                     if shot_rect.colliderect(tank_rect):
                         shots.remove(shot)
                         explosions.append(Explosion(tank.position.as_tuple(), cfg.EXPLOSION_DURATION_HIT))
 
                         damage = calculate_damage(shot, tank)
+                        damage *= tank.get_damage_multiplier()
                         shot.playerContext.damage_dealt += damage
+                        shot.playerContext.shots_hit += 1
                         tank.health -= damage
 
                         if tank.health < 0:
-                            #tank dead
                             shot.playerContext.kills += 1
                             tanks.remove(tank)
-                            #if tank was operated over network, send game over message
                             try:
                                 tank.operator.send_game_over_message("Game Over: you lose")
                             except AttributeError:
-                                pass  # not a OperatorTCPadaptor_Server
+                                pass
 
         #tanksalive = [tt for tt in tanks if tt.alive]
 
@@ -402,7 +518,23 @@ def game_loop(tanks):
         pygame.display.update()
         clock.tick(game_fps)
 
-    return winner
+    # Collect end-of-game stats
+    all_tank_stats = []
+    for t in all_tanks_started:
+        accuracy = (t.shots_hit / t.shots_fired * 100) if t.shots_fired > 0 else 0
+        all_tank_stats.append({
+            "name": t.name,
+            "kills": t.kills,
+            "damage_dealt": round(t.damage_dealt, 1),
+            "shots_fired": t.shots_fired,
+            "shots_hit": t.shots_hit,
+            "accuracy": round(accuracy, 1),
+            "powerups_collected": t.powerups_collected,
+            "health_remaining": max(0, round(t.health, 1)),
+        })
+    all_tank_stats.sort(key=lambda s: (s["kills"], s["damage_dealt"]), reverse=True)
+
+    return winner, all_tank_stats
 
 ########################################### ACTION!
 #game_intro() #TODO:Prod
@@ -430,6 +562,6 @@ player_tanks = [PlayerContext(starting_positions[pos_name][0],
                                 for pos_name, operator in operators_and_start_pos.items() if operator is not None]
 
 
-winner = game_loop(player_tanks)
-game_over(winner)
+winner, tank_stats = game_loop(player_tanks)
+game_over(winner, tank_stats)
 pygame.quit()

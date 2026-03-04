@@ -137,3 +137,40 @@ LOBBY_LINE_HEIGHT = 100
 LINES_PRINT_TOPLEFT = (50, 50)
 LINES_PRINT_LINE_HEIGHT = 60
 TIMER_POSITION = (5, 5)
+
+# ---------------------------------------------------------------------------
+# Arena Obstacles
+# ---------------------------------------------------------------------------
+# Default arena obstacles - list of (x, y, width, height)
+ARENA_OBSTACLES = [
+    (500, 300, 200, 20),   # horizontal wall center-top
+    (500, 480, 200, 20),   # horizontal wall center-bottom
+    (350, 350, 20, 100),   # vertical wall left
+    (830, 350, 20, 100),   # vertical wall right
+]
+
+OBSTACLE_COLOR = (130, 130, 130)
+OBSTACLE_BORDER_COLOR = (90, 90, 90)
+
+# ---------------------------------------------------------------------------
+# Power-ups
+# ---------------------------------------------------------------------------
+POWERUP_SPAWN_INTERVAL = 15    # seconds between spawns
+POWERUP_DURATION = 10          # seconds a power-up effect lasts
+POWERUP_SPEED_MULTIPLIER = 1.5
+POWERUP_RAPID_FIRE_COOLDOWN = 1  # seconds (vs normal SHOT_COOLDOWN_SECS)
+POWERUP_SHIELD_DAMAGE_REDUCTION = 0.5
+POWERUP_RADIUS = 15            # visual radius for rendering
+POWERUP_PICKUP_RADIUS = 30     # collision radius for pickup
+
+POWERUP_COLORS = {
+    "speed_boost": (0, 120, 255),    # blue
+    "rapid_fire": (255, 50, 50),     # red
+    "shield": (50, 255, 50),         # green
+}
+
+POWERUP_LABELS = {
+    "speed_boost": "S",
+    "rapid_fire": "R",
+    "shield": "D",
+}
