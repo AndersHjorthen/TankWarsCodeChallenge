@@ -462,15 +462,16 @@ def game_loop(tanks):
         # Remove collected power-ups
         powerups = [pu for pu in powerups if pu.alive]
 
+        shots_to_remove = set()
         for ss in shots:
             # Check shot-obstacle collision
             if check_shot_obstacle_collision(ss, arena_obstacles):
-                shots.remove(ss)
+                shots_to_remove.add(id(ss))
                 effects.emit_explosion(ss.position.x, ss.position.y)
                 continue
 
             if ss.move_check_boundary(1, shot_speed):
-                shots.remove(ss)
+                shots_to_remove.add(id(ss))
                 effects.emit_explosion(ss.position.x, ss.position.y)
                 continue
 
@@ -481,15 +482,23 @@ def game_loop(tanks):
 
             ss.render_entity()
 
+        shots = [s for s in shots if id(s) not in shots_to_remove]
+
         ## Check for impacts
+        shots_to_remove = set()
+        tanks_to_remove = set()
         for shot in shots:
+            if id(shot) in shots_to_remove:
+                continue
             shot_rect = shot.get_intersection_geometry()
             for tank in tanks:
+                if id(tank) in tanks_to_remove:
+                    continue
                 if tank != shot.playerContext:
                     tank_rect = tank.get_intersection_geometry()
 
                     if shot_rect.colliderect(tank_rect):
-                        shots.remove(shot)
+                        shots_to_remove.add(id(shot))
 
                         damage = calculate_damage(shot, tank)
                         damage *= tank.get_damage_multiplier()
@@ -514,11 +523,15 @@ def game_loop(tanks):
                             hud.kill_feed.add_kill(
                                 shot.playerContext.name, killer_color,
                                 tank.name, victim_color)
-                            tanks.remove(tank)
+                            tanks_to_remove.add(id(tank))
                             try:
                                 tank.operator.send_game_over_message("Game Over: you lose")
                             except AttributeError:
                                 pass
+                        break  # shot consumed, move to next shot
+
+        shots = [s for s in shots if id(s) not in shots_to_remove]
+        tanks = [t for t in tanks if id(t) not in tanks_to_remove]
 
         # Update effects / particles
         effects.update(dt)
