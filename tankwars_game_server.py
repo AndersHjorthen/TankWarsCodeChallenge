@@ -18,10 +18,13 @@ from tank_operator import ObstacleObject
 from tank_operator import PowerUpObject
 from src.countdown_timer import CountDownTimer
 from src.screens import game_wait_for_players_screen
-from src.screens import msg_screen_topleft
+from src.screens import msg_screen_topleft, _msg_center
 from src.health_bar import draw_health_bar
 from src.obstacles import Obstacle
 from src.powerups import PowerUp, ActiveEffect
+from src.arena import ArenaRenderer
+from src.effects import EffectsManager
+from src.hud import HUD
 import server_settings
 import game_config as cfg
 
@@ -65,6 +68,8 @@ turret_image = pygame.transform.scale(pygame.image.load('res/turret.png'), cfg.T
 # for picking current time for the frames per second
 clock = pygame.time.Clock()
 
+# Pre-rendered arena background
+arena_renderer = ArenaRenderer()
 
 s_font = pygame.font.SysFont(cfg.FONT_NAME, cfg.FONT_SIZE_SMALL)
 m_font = pygame.font.SysFont(cfg.FONT_NAME, cfg.FONT_SIZE_MEDIUM)
@@ -105,8 +110,11 @@ def game_intro():
                     pygame.quit()
                     quit()
 
-        msg_screen("Trophy Wall Tank Wars!", cfg.COLOR_WHITE, -100, size="medium")
-        msg_screen("Battle commencing...", cfg.COLOR_WHEAT, 15)
+        game_layout_display.fill(cfg.ARENA_BG_COLOR)
+        _msg_center(game_layout_display, "Trophy Wall Tank Wars!", cfg.COLOR_WHITE,
+                     -100, size="medium", shadow=True)
+        _msg_center(game_layout_display, "Battle commencing...", cfg.COLOR_WHEAT,
+                     15, shadow=True)
 
         pygame.display.update()
 
@@ -130,19 +138,36 @@ def game_over(winner, tank_stats=None):
                 pygame.quit()
                 quit()
 
-        game_layout_display.fill(cfg.COLOR_BLACK)
-        msg_screen("Game Over - Winner(s):", cfg.COLOR_WHITE, -100, size="medium")
-        msg_screen(winner, cfg.COLOR_WHITE, -30, size="medium")
+        game_layout_display.fill(cfg.ARENA_BG_COLOR)
+        _msg_center(game_layout_display, "Game Over - Winner(s):", cfg.COLOR_WHITE,
+                     -120, size="medium", shadow=True)
+        _msg_center(game_layout_display, winner,
+                     cfg.GAMEOVER_WINNER_HIGHLIGHT_COLOR, -60, size="medium", shadow=True)
 
         # Display stats table
         if tank_stats:
-            y_offset = 40
-            msg_screen("Name       Kills  Damage  Accuracy  Powerups", cfg.COLOR_GREY, y_offset, size="vsmall")
-            for i, s in enumerate(tank_stats):
-                line = f"{s['name']:<12} {s['kills']}     {s['damage_dealt']:>6}    {s['accuracy']:>5}%     {s['powerups_collected']}"
-                msg_screen(line, cfg.COLOR_WHEAT, y_offset + 25 + i * 22, size="vsmall")
+            # Table background
+            table_w, table_h = 600, 30 + len(tank_stats) * 28
+            table_surf = pygame.Surface((table_w, table_h), pygame.SRCALPHA)
+            table_surf.fill((20, 20, 30, cfg.GAMEOVER_STATS_BG_ALPHA))
+            table_x = (cfg.DISPLAY_WIDTH - table_w) // 2
+            table_y = cfg.DISPLAY_HEIGHT // 2 + 10
+            game_layout_display.blit(table_surf, (table_x, table_y))
 
-        msg_screen("Press any key to quit", cfg.COLOR_WHEAT, 200, size="small")
+            y_offset = 20
+            _msg_center(game_layout_display, "Name       Kills  Damage  Accuracy  Powerups",
+                         cfg.COLOR_GREY, y_offset, size="vsmall")
+            for i, s in enumerate(tank_stats):
+                # Highlight the winner row
+                color = cfg.COLOR_WHEAT
+                if s['name'] in winner:
+                    color = cfg.GAMEOVER_WINNER_HIGHLIGHT_COLOR
+                line = f"{s['name']:<12} {s['kills']}     {s['damage_dealt']:>6}    {s['accuracy']:>5}%     {s['powerups_collected']}"
+                _msg_center(game_layout_display, line, color,
+                             y_offset + 25 + i * 28, size="vsmall")
+
+        _msg_center(game_layout_display, "Press any key to quit", cfg.COLOR_WHEAT,
+                     220, size="small", shadow=True)
 
         pygame.display.update()
 
@@ -229,7 +254,7 @@ def calculate_damage(shot, tank):
     return dmg
 
 class PlayerContext(GameEntity):
-    def __init__(self, posVec, directionVec, operator, image):
+    def __init__(self, posVec, directionVec, operator, image, color_name="red"):
         self.position = posVec
         self.direction = Vec(directionVec)
         self.turret_direction = Vec(directionVec)
@@ -245,6 +270,8 @@ class PlayerContext(GameEntity):
         self.shots_hit = 0
         self.powerups_collected = 0
         self.active_effects = []
+        self.color_name = color_name
+        self.team_color = cfg.COLOR_LOOKUP.get(color_name, cfg.COLOR_WHITE)
 
     def has_effect(self, power_type):
         return any(e.power_type == power_type and not e.is_expired() for e in self.active_effects)
@@ -281,7 +308,8 @@ class PlayerContext(GameEntity):
         draw_health_bar(game_layout_display,
                         self.position + Vec(0, cfg.TANK_HEALTH_BAR_OFFSET_Y),
                         self.health / tank_start_health,
-                        size=cfg.TANK_HEALTH_BAR_SIZE)
+                        size=cfg.TANK_HEALTH_BAR_SIZE,
+                        name=self.name)
 
 
     def get_gamestate_object(self):
@@ -302,7 +330,7 @@ class Shot(GameEntity):
 
 def render_obstacles(screen, obstacles):
     for obs in obstacles:
-        obs.render(screen, cfg.OBSTACLE_COLOR, cfg.OBSTACLE_BORDER_COLOR)
+        obs.render(screen)
 
 def check_shot_obstacle_collision(shot, obstacles):
     shot_rect = shot.get_intersection_geometry()
@@ -321,7 +349,7 @@ def check_tank_powerup_collision(tank, powerups):
     return collected
 
 shots_cooldown_expiry = {}
-def check_shots_fired(player_context, operator_actions):
+def check_shots_fired(player_context, operator_actions, effects):
     shot = None
 
     if operator_actions.shoot:
@@ -337,35 +365,11 @@ def check_shots_fired(player_context, operator_actions):
             shot = Shot(player_context, shot_image)
             player_context.shots_fired += 1
             shots_cooldown_expiry[player_context] = time.time() + effective_cooldown
+            # Muzzle flash effect
+            angle = player_context.turret_direction.get_orientation_angle()
+            effects.emit_muzzle_flash(player_context.position.x, player_context.position.y, angle)
     return shot
 
-class Explosion:
-    def __init__(self, center, duration):
-        self.center = center
-        self.start_time = pygame.time.get_ticks()
-        self.duration = duration * 1000  # convert seconds to milliseconds
-        self.alive = True
-
-# Function to draw the explosion
-def draw_explosion(screen, explosion):
-    current_time = pygame.time.get_ticks()
-    elapsed_time = current_time - explosion.start_time
-
-    if elapsed_time > explosion.duration:
-        explosion.alive = False
-        return
-
-    # Calculate the radius of the explosion based on elapsed time
-    max_radius = cfg.EXPLOSION_MAX_RADIUS
-    num_circles = cfg.EXPLOSION_NUM_CIRCLES
-    for i in range(num_circles):
-        # Randomize the color slightly to vary between red and orange
-        color = (cfg.EXPLOSION_COLOR_RED,
-                 random.randint(cfg.EXPLOSION_COLOR_GREEN_MIN, cfg.EXPLOSION_COLOR_GREEN_MAX),
-                 cfg.EXPLOSION_COLOR_BLUE)
-        # Each circle starts small and expands over time
-        radius = max_radius * (i + 1) / num_circles * (elapsed_time / explosion.duration)
-        pygame.draw.circle(screen, color, explosion.center, int(radius))
 
 def game_loop(tanks):
     winner = None
@@ -373,17 +377,22 @@ def game_loop(tanks):
     all_tanks_started = list(tanks)
 
     shots = []
-    explosions = []
     powerups = []
     last_powerup_spawn = time.time()
 
+    # Visual systems
+    effects = EffectsManager()
+    hud = HUD()
+
     while winner is None:
+        dt = clock.get_time() / 1000.0  # seconds since last frame
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "NONE - quitting early?", []
 
-        ## Render
-        game_layout_display.fill(cfg.COLOR_BLACK)
+        ## Render arena background (replaces fill(BLACK))
+        arena_renderer.render(game_layout_display)
 
         # Render obstacles
         render_obstacles(game_layout_display, arena_obstacles)
@@ -421,11 +430,20 @@ def game_loop(tanks):
                                     game_time_remaining=time_remaining)
             tankActions = tank.operator.get_tank_action(gamestate)
             if tankActions:
-                shot = check_shots_fired(tank, tankActions)
+                shot = check_shots_fired(tank, tankActions, effects)
                 if not shot is None:
                     shots.append(shot)
                 tank.apply_turn(tankActions)
-                tank.move_check_boundary(tankActions.engine, tank.get_effective_max_speed())
+
+                # Track previous position for smoke trail
+                prev_x, prev_y = tank.position.x, tank.position.y
+                hit_boundary = tank.move_check_boundary(tankActions.engine, tank.get_effective_max_speed())
+
+                # Emit smoke trail if tank is moving
+                if abs(tankActions.engine) > 0.1:
+                    effects.emit_smoke_trail(tank.position.x, tank.position.y)
+            else:
+                tank.move_check_boundary(0, tank.get_effective_max_speed())
 
             # Check power-up collection
             collected = check_tank_powerup_collision(tank, powerups)
@@ -433,7 +451,13 @@ def game_loop(tanks):
                 tank.add_effect(pu.power_type)
                 tank.powerups_collected += 1
 
+            # Render power-up aura rings
+            effects.render_powerup_aura(game_layout_display, tank)
+
             tank.render_entity()
+
+            # Render hit flash overlay
+            effects.render_hit_flash(game_layout_display, tank)
 
         # Remove collected power-ups
         powerups = [pu for pu in powerups if pu.alive]
@@ -442,20 +466,20 @@ def game_loop(tanks):
             # Check shot-obstacle collision
             if check_shot_obstacle_collision(ss, arena_obstacles):
                 shots.remove(ss)
-                explosions.append(Explosion(ss.position.as_tuple(), 0.3))
+                effects.emit_explosion(ss.position.x, ss.position.y)
                 continue
 
             if ss.move_check_boundary(1, shot_speed):
                 shots.remove(ss)
-                explosions.append(Explosion(ss.position.as_tuple(), cfg.EXPLOSION_DURATION_BORDER))
+                effects.emit_explosion(ss.position.x, ss.position.y)
                 continue
 
-            ss.render_entity()
+            # Shot glow effect
+            effects.render_shot_glow(game_layout_display, ss.position.x, ss.position.y)
+            # Shot tracer particles
+            effects.emit_tracer(ss.position.x, ss.position.y)
 
-        for ee in explosions:
-            draw_explosion(game_layout_display, ee)
-            if not ee.alive:
-                explosions.remove(ee)
+            ss.render_entity()
 
         ## Check for impacts
         for shot in shots:
@@ -466,7 +490,6 @@ def game_loop(tanks):
 
                     if shot_rect.colliderect(tank_rect):
                         shots.remove(shot)
-                        explosions.append(Explosion(tank.position.as_tuple(), cfg.EXPLOSION_DURATION_HIT))
 
                         damage = calculate_damage(shot, tank)
                         damage *= tank.get_damage_multiplier()
@@ -474,15 +497,41 @@ def game_loop(tanks):
                         shot.playerContext.shots_hit += 1
                         tank.health -= damage
 
+                        # Hit flash on damaged tank
+                        effects.trigger_hit_flash(tank)
+
+                        # Explosion at impact
+                        effects.emit_explosion(tank.position.x, tank.position.y)
+
                         if tank.health < 0:
                             shot.playerContext.kills += 1
+                            # Big explosion + screen shake on tank destruction
+                            effects.emit_explosion(tank.position.x, tank.position.y, big=True)
+                            effects.trigger_screen_shake()
+                            # Kill feed event
+                            killer_color = getattr(shot.playerContext, "team_color", cfg.COLOR_WHITE)
+                            victim_color = getattr(tank, "team_color", cfg.COLOR_WHITE)
+                            hud.kill_feed.add_kill(
+                                shot.playerContext.name, killer_color,
+                                tank.name, victim_color)
                             tanks.remove(tank)
                             try:
                                 tank.operator.send_game_over_message("Game Over: you lose")
                             except AttributeError:
                                 pass
 
-        #tanksalive = [tt for tt in tanks if tt.alive]
+        # Update effects / particles
+        effects.update(dt)
+
+        # Render particles (after everything else so they appear on top)
+        # Apply screen shake if active
+        if effects.is_shaking:
+            shake_x, shake_y = effects.get_shake_offset()
+            shake_surface = game_layout_display.copy()
+            game_layout_display.fill(cfg.ARENA_BG_COLOR)
+            game_layout_display.blit(shake_surface, (shake_x, shake_y))
+
+        effects.render_particles(game_layout_display)
 
         if len(tanks) == 1:
             winner = tanks[0].name
@@ -495,7 +544,10 @@ def game_loop(tanks):
             winner = "Draw - no one survived"
 
         timed_out, timer_string = count_down_timer.get_countdown_reached_and_timer_string()
-        msg_screen_topleft(game_layout_display, timer_string, cfg.COLOR_GREY, cfg.TIMER_POSITION, "vsmall")
+
+        # HUD: scoreboard, timer, kill feed (replaces old timer rendering)
+        hud.render(game_layout_display, all_tanks_started, time_remaining)
+
         if timed_out:
             max_score = max(obj.damage_dealt for obj in tanks)
             top_scorers = [obj for obj in tanks if obj.damage_dealt == max_score]
@@ -509,12 +561,14 @@ def game_loop(tanks):
         pygame.display.update()
         clock.tick(game_fps)
 
-    # before ending, let the winner explosion render to completion
-    while explosions:
-        for ee in explosions:
-            draw_explosion(game_layout_display, ee)
-            if not ee.alive:
-                explosions.remove(ee)
+    # Let remaining particles finish
+    end_time = time.time() + 1.5
+    while time.time() < end_time and effects.particles.count > 0:
+        dt = clock.get_time() / 1000.0
+        arena_renderer.render(game_layout_display)
+        render_obstacles(game_layout_display, arena_obstacles)
+        effects.update(dt)
+        effects.render_particles(game_layout_display)
         pygame.display.update()
         clock.tick(game_fps)
 
@@ -558,7 +612,8 @@ tank_images = {
 player_tanks = [PlayerContext(starting_positions[pos_name][0],
                               starting_positions[pos_name][1],
                               operator,
-                              tank_images[pos_name])
+                              tank_images[pos_name],
+                              color_name=pos_name)
                                 for pos_name, operator in operators_and_start_pos.items() if operator is not None]
 
 

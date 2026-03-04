@@ -174,3 +174,138 @@ POWERUP_LABELS = {
     "rapid_fire": "R",
     "shield": "D",
 }
+
+# ---------------------------------------------------------------------------
+# Arena Renderer
+# ---------------------------------------------------------------------------
+ARENA_BG_COLOR = (30, 35, 45)            # dark blue-grey background
+ARENA_GRID_COLOR = (40, 46, 58)          # subtle grid lines
+ARENA_GRID_SPACING = 60                  # pixels between grid lines
+ARENA_BORDER_COLOR_OUTER = (80, 90, 110) # outer border line
+ARENA_BORDER_COLOR_INNER = (60, 70, 85)  # inner border line
+ARENA_BORDER_WIDTH = 3                   # thickness of each border line
+ARENA_BORDER_GAP = 6                     # gap between double lines
+ARENA_CORNER_ACCENT_LEN = 30            # length of corner accent marks
+ARENA_CORNER_ACCENT_COLOR = (100, 120, 150)
+
+# ---------------------------------------------------------------------------
+# Particle System
+# ---------------------------------------------------------------------------
+PARTICLE_MAX_COUNT = 500
+PARTICLE_DEFAULT_SIZE = 3.0
+PARTICLE_MIN_SIZE = 0.5                  # particles below this are removed
+
+# Smoke trail particles (behind moving tanks)
+SMOKE_TRAIL_RATE = 2                     # particles per frame while moving
+SMOKE_TRAIL_SIZE = 4.0
+SMOKE_TRAIL_LIFETIME = 0.6              # seconds
+SMOKE_TRAIL_SPEED = 0.5
+SMOKE_TRAIL_COLOR = (80, 80, 90)
+SMOKE_TRAIL_COLOR_VAR = 20              # random variation in RGB
+
+# Shot tracer particles
+TRACER_RATE = 3                          # particles per frame along shot path
+TRACER_SIZE = 2.5
+TRACER_LIFETIME = 0.3
+TRACER_SPEED = 0.3
+TRACER_COLOR = (255, 200, 80)
+TRACER_COLOR_VAR = 30
+
+# Muzzle flash
+MUZZLE_FLASH_PARTICLES = 8
+MUZZLE_FLASH_SIZE = 5.0
+MUZZLE_FLASH_LIFETIME = 0.15
+MUZZLE_FLASH_SPEED = 4.0
+MUZZLE_FLASH_COLOR = (255, 240, 150)
+
+# Explosion particles (replaces old Explosion class)
+EXPLOSION_PARTICLE_COUNT = 30
+EXPLOSION_PARTICLE_SIZE = 5.0
+EXPLOSION_PARTICLE_LIFETIME = 0.8
+EXPLOSION_PARTICLE_SPEED = 5.0
+EXPLOSION_FIRE_COLORS = [
+    (255, 100, 20),
+    (255, 160, 40),
+    (255, 200, 60),
+    (255, 80, 10),
+]
+
+# Debris chunks in explosions
+DEBRIS_PARTICLE_COUNT = 8
+DEBRIS_PARTICLE_SIZE = 3.0
+DEBRIS_PARTICLE_LIFETIME = 1.0
+DEBRIS_PARTICLE_SPEED = 3.5
+DEBRIS_COLOR = (140, 140, 130)
+DEBRIS_COLOR_VAR = 30
+
+# ---------------------------------------------------------------------------
+# Effects
+# ---------------------------------------------------------------------------
+# Hit flash (brief white overlay on damaged tank)
+HIT_FLASH_DURATION = 0.1                # seconds
+
+# Screen shake on tank destruction
+SCREEN_SHAKE_DURATION = 0.4             # seconds
+SCREEN_SHAKE_INTENSITY = 8              # max pixel offset
+
+# Shot glow (additive circle behind shot sprite)
+SHOT_GLOW_RADIUS = 12
+SHOT_GLOW_COLOR = (255, 180, 60)
+SHOT_GLOW_ALPHA = 60
+
+# Power-up aura ring around affected tanks
+AURA_RING_RADIUS = 35
+AURA_RING_WIDTH = 2
+AURA_RING_ALPHA = 120
+AURA_PULSE_SPEED = 3.0                  # Hz
+
+# ---------------------------------------------------------------------------
+# HUD
+# ---------------------------------------------------------------------------
+HUD_SCOREBOARD_POS = (10, 10)           # top-left corner
+HUD_SCOREBOARD_WIDTH = 200
+HUD_SCOREBOARD_LINE_HEIGHT = 22
+HUD_SCOREBOARD_BG_ALPHA = 140
+HUD_SCOREBOARD_BG_COLOR = (20, 20, 30)
+
+HUD_TIMER_COLOR_NORMAL = (180, 180, 190)
+HUD_TIMER_COLOR_WARNING = (255, 200, 50)  # < 60s
+HUD_TIMER_COLOR_CRITICAL = (255, 60, 60)  # < 15s
+HUD_TIMER_WARNING_SECS = 60
+HUD_TIMER_CRITICAL_SECS = 15
+
+HUD_KILLFEED_POS = (10, 10)             # offset from top-right
+HUD_KILLFEED_MAX_ENTRIES = 5
+HUD_KILLFEED_DISPLAY_SECS = 5.0
+HUD_KILLFEED_LINE_HEIGHT = 20
+HUD_KILLFEED_BG_ALPHA = 140
+
+# ---------------------------------------------------------------------------
+# Obstacle Visuals (textured)
+# ---------------------------------------------------------------------------
+OBSTACLE_FILL_COLOR = (70, 75, 85)
+OBSTACLE_HASH_COLOR = (55, 60, 70)
+OBSTACLE_HASH_SPACING = 8               # pixels between hash lines
+OBSTACLE_HIGHLIGHT_COLOR = (90, 95, 110) # top/left edge highlight
+OBSTACLE_SHADOW_COLOR = (45, 48, 55)     # bottom/right edge shadow
+OBSTACLE_BORDER_WIDTH_NEW = 2
+
+# ---------------------------------------------------------------------------
+# Health Bar (enhanced)
+# ---------------------------------------------------------------------------
+HEALTH_BAR_BORDER_COLOR = (30, 30, 30)
+HEALTH_BAR_BORDER_WIDTH = 1
+HEALTH_BAR_NAME_OFFSET_Y = 8            # pixels below health bar to show name
+HEALTH_BAR_NAME_FONT_SIZE = 12
+
+# ---------------------------------------------------------------------------
+# Screen styling
+# ---------------------------------------------------------------------------
+SCREEN_TEXT_SHADOW_OFFSET = 2
+SCREEN_TEXT_SHADOW_COLOR = (0, 0, 0)
+LOBBY_PANEL_BG_COLOR = (20, 25, 35)
+LOBBY_PANEL_BG_ALPHA = 180
+LOBBY_PANEL_PADDING = 20
+LOBBY_COLOR_INDICATOR_SIZE = 16         # square color swatch size
+GAMEOVER_WINNER_HIGHLIGHT_COLOR = (255, 215, 0)  # gold
+GAMEOVER_STATS_BG_ALPHA = 160
