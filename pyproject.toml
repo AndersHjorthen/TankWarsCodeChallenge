@@ -1,0 +1,29 @@
+[project]
+name = "tankwars"
+version = "2.0.0"
+description = "TankWars Code Challenge - a multiplayer tank battle game"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pygame>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4.0",
+    "mypy>=1.0",
+]
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"

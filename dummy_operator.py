@@ -1,4 +1,3 @@
-import pygame
 from tank_operator import OperatorActions
 from tank_operator import TankOperator
 

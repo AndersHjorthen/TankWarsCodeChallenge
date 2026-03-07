@@ -6,18 +6,19 @@ pygame.init()
 import client_settings
 from operator_tcp_adapter import OperatorTCPadaptor_Client
 from src.screens import print_lines_on_surface
+import game_config as cfg
 
 
 
 
 # Setting up the clock and FPS
 clock = pygame.time.Clock()
-client_fps = 60
+client_fps = cfg.CLIENT_FPS
 
-display_size = (1200, 800)
+display_size = (cfg.DISPLAY_WIDTH, cfg.DISPLAY_HEIGHT)
 
 clientscreen = pygame.display.set_mode(display_size)
-pygame.display.set_caption('Tank Wars - "Headless" Client')
+pygame.display.set_caption(cfg.WINDOW_CAPTION_CLIENT)
 icon = pygame.image.load("res/tank_alpha.png")
 pygame.display.set_icon(icon)
 
@@ -32,7 +33,7 @@ def run_client(port=None):
     try:
         op = OperatorTCPadaptor_Client(client_settings.serverIp, port, client_settings.tankoperator)
         while True:
-            clientscreen.fill((0, 0, 0))
+            clientscreen.fill(cfg.COLOR_BLACK)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                     return
@@ -40,7 +41,7 @@ def run_client(port=None):
             more_data = True
             while more_data:
                 more_data = op.run_client()
-            
+
             txtlines = ["Tank Wars Game Client: Headless mode",
                         "Server=" + client_settings.serverIp + ":" + str(port) + " \tOperatorType="+ str(type(client_settings.tankoperator)),
                         "Client connected: " + str(op.tcp_client.connected),
@@ -48,11 +49,11 @@ def run_client(port=None):
                         "Actions sent #: " + str(op._actions_sent),
                         "Press ESC to quit"
                         ]
-            
+
             if op.game_over_message:
                 txtlines.append(op.game_over_message)
 
-            print_lines_on_surface(clientscreen, txtlines, (200,200,200))
+            print_lines_on_surface(clientscreen, txtlines, cfg.COLOR_CLIENT_TEXT)
             pygame.display.update()
             clock.tick(client_fps)
 
